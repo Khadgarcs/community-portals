@@ -128,11 +128,11 @@ if (invoked) {
   // keyed on `code` sees none. Check enum membership here, in the contract's
   // shape, for both `--flag value` and `--flag=value`.
   const enumValues = (schema: unknown): string[] | undefined => {
-    let s = schema as { _def?: { typeName?: string; innerType?: unknown; values?: string[] } } | undefined
-    while (s?._def && ["ZodDefault", "ZodOptional", "ZodNullable"].includes(s._def.typeName ?? "")) {
+    let s = schema as { _def?: { type?: string; innerType?: unknown }; options?: string[] } | undefined
+    while (s?._def && ["default", "optional", "nullable"].includes(s._def.type ?? "")) {
       s = s._def.innerType as typeof s
     }
-    return s?._def?.typeName === "ZodEnum" ? s._def.values : undefined
+    return s?._def?.type === "enum" ? s.options : undefined
   }
   for (let i = 1; i < argv.length; i++) {
     const token = argv[i]
