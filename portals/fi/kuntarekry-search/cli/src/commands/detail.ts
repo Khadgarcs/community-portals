@@ -1,5 +1,5 @@
 import {
-  BASE_URL, CLIError, decodeEntities, finnishDate, helsinkiToday, htmlToText, inlineText, kuntarekryGet,
+  BASE_URL, CLIError, decodeEntities, finnishDate, helsinkiClock, helsinkiToday, htmlToText, inlineText, kuntarekryGet,
   normalizeJobRef, stripInvisible, visibleHtml, type Format,
 } from "../helpers.js"
 
@@ -66,14 +66,49 @@ function text(value: unknown): string | null {
   return typeof value === "string" ? inlineText(value) : null
 }
 
-export function parseDetail(html: string, slug: string, today = helsinkiToday()): JobDetail {
+/** "11:21" or "11.21" -> "11:21"; anything else is null. */
+function clock(value: string | null | undefined): string | null {
+  const m = value?.trim().match(/^(\d{1,2})[:.](\d{2})$/)
+  return m && Number(m[1]) < 24 && Number(m[2]) < 60 ? `${m[1].padStart(2, "0")}:${m[2]}` : null
+}
+
+/** A JSON-LD timestamp's own calendar date and time, as written ("2027-01-06T23:59:00+02:00" -> 2027-01-06, 23:59). */
+function ldTimestamp(value: unknown): { date: string | null; time: string | null } {
+  const m = typeof value === "string" ? value.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2}))?/) : null
+  if (!m) return { date: null, time: null }
+  return { date: finnishDate(`${m[3]}.${m[2]}.${m[1]}`), time: clock(m[4]) }
+}
+
+/** schema.org baseSalary: `value` may be text, a number or a QuantitativeValue. */
+function salaryText(base: unknown): string | null {
+  if (!base || typeof base !== "object") return null
+  const b = base as Record<string, unknown>
+  const currency = typeof b.currency === "string" && b.currency.trim() ? ` ${b.currency.trim()}` : ""
+  const num = (x: unknown): string | null => (typeof x === "number" && Number.isFinite(x) ? String(x) : text(x))
+  const v = b.value
+  if (typeof v === "string") return text(v)
+  if (typeof v === "number") return Number.isFinite(v) ? `${v}${currency}` : null
+  if (!v || typeof v !== "object") return null
+  const q = v as Record<string, unknown>
+  const amount = num(q.value) ?? ([num(q.minValue), num(q.maxValue)].filter(Boolean).join("-") || null)
+  if (!amount) return null
+  const unit = text(q.unitText)
+  return `${amount}${currency}${unit ? ` / ${unit.toLowerCase()}` : ""}`
+}
+
+export function parseDetail(html: string, slug: string, now = Date.now()): JobDetail {
   // JSON-LD is read from the raw page (it lives in a <script>); everything a
   // reader sees is read from the page with hidden markup already removed.
   const ld = jobPosting(html) ?? {}
   const visible = visibleHtml(html)
   const view = visible.match(/<job-view\b[^>]*>/i)?.[0] ?? ""
+  // Carries the posting's publication-date/-time and publication-end/-end-time attributes.
+  const button = visible.match(/<favorites-job-button\b[^>]*>/i)?.[0] ?? ""
   const all = sections(visible)
-  const factSection = all.find((s) => s.title === "Työpaikan tiedot" || s.title === "Arbetsplatsens uppgifter" || s.title === "Job details")
+  // The CLI always reads the Finnish page (/fi/tyopaikat/), whose labels are
+  // Finnish whatever language the posting is written in (checked on Swedish
+  // and English postings, 25.11.2026), so only the Finnish labels are read.
+  const factSection = all.find((s) => s.title === "Työpaikan tiedot")
   const info = factSection ? facts(factSection.body) : {}
   const one = (label: string): string | null => info[label]?.join(" ") ?? null
 
@@ -89,17 +124,29 @@ export function parseDetail(html: string, slug: string, today = helsinkiToday())
   const unitRaw = employerLines.slice(1).join(", ")
   const unit = (company && unitRaw.startsWith(`${company}, `) ? unitRaw.slice(company.length + 2) : unitRaw) || null
 
-  const address = (ld.jobLocation as Record<string, unknown> | undefined)?.address as Record<string, unknown> | undefined
-  const location = text(address?.addressLocality)
-  const region = text(address?.addressRegion)
+  // jobLocation is one Place, or an array of them for a posting with several sites.
+  const places = (Array.isArray(ld.jobLocation) ? ld.jobLocation : [ld.jobLocation])
+    .map((p) => (p && typeof p === "object" ? (p as Record<string, unknown>).address : null))
+    .filter((a): a is Record<string, unknown> => !!a && typeof a === "object")
+  const joined = (key: string) => [...new Set(places.map((a) => text(a[key])).filter((v): v is string => !!v))].join(", ") || null
+  const location = joined("addressLocality")
+  const region = joined("addressRegion")
 
-  // "23.11.2026 klo 11:21 - 6.1.2027 klo 23:59"
+  // Posted: JSON-LD datePosted, else the page's publication-date. The start of
+  // the application period ("Hakuaika") is not used: it need not be the posting date.
+  const posted = ldTimestamp(ld.datePosted).date ?? finnishDate(attr(button, "publication-date"))
+
+  // Deadline: "Hakuaika" ("23.11.2026 klo 11:21 - 6.1.2027 klo 23:59"), else
+  // the page's publication-end, else JSON-LD validThrough.
   const period = one("Hakuaika")?.match(/^(\d{1,2}\.\d{1,2}\.\d{4})(?:\s+klo\s+[\d:.]+)?\s*-\s*(\d{1,2}\.\d{1,2}\.\d{4})(?:\s+klo\s+([\d:.]+))?/)
-  const posted = typeof ld.datePosted === "string" && /^\d{4}-\d{2}-\d{2}/.test(ld.datePosted) ? ld.datePosted.slice(0, 10) : finnishDate(period?.[1])
-  const deadline = finnishDate(period?.[2])
+  const validThrough = ldTimestamp(ld.validThrough)
+  const deadline = finnishDate(period?.[2]) ?? finnishDate(attr(button, "publication-end")) ?? validThrough.date
+  const deadlineTime = clock(period?.[3]) ?? clock(attr(button, "publication-end-time")) ?? validThrough.time
+  // Open until the deadline's time on its day (end of day when no time is given), in Finnish time.
+  const today = helsinkiToday(now)
+  const isActive = deadline ? deadline > today || (deadline === today && (deadlineTime ?? "23:59") >= helsinkiClock(now)) : null
 
-  const salaryLd = (ld.baseSalary as Record<string, unknown> | undefined)?.value
-  const salary = one("Palkka") ?? (typeof salaryLd === "string" ? text(salaryLd) : null)
+  const salary = one("Palkka") ?? salaryText(ld.baseSalary)
 
   // The posting itself: the lead paragraph plus every titled section except the fact table.
   const lead = visible.match(/<p class="lead"[^>]*>([\s\S]*?)<\/p>/i)?.[1]
@@ -132,8 +179,8 @@ export function parseDetail(html: string, slug: string, today = helsinkiToday())
     region,
     date: posted,
     deadline,
-    deadlineTime: period?.[3] ?? null,
-    isActive: deadline ? deadline >= today : null,
+    deadlineTime,
+    isActive,
     employmentType: one("Tyyppi"),
     contractType: one("Työsuhteen tyyppi"),
     start: one("Työn alkamispäivä/ajankohta"),

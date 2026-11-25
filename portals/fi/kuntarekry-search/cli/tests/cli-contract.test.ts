@@ -19,6 +19,7 @@ describe("argument errors exit 1 with JSON on stderr and never touch the network
     [["search", "--limit", "0"], "BAD_ARG"],
     [["search", "--limit", "49"], "BAD_ARG"],
     [["search", "--page", "1.5"], "BAD_ARG"],
+    [["search", "--page", "1000"], "BAD_ARG"],
     [["search", "--jobage", "-1"], "MISSING_REQUIRED"],
     [["search", "--format", "xml"], "BAD_ARG"],
     [["search", "--sort", "popular"], "BAD_ARG"],

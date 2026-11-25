@@ -19,6 +19,10 @@ const HIDDEN_MARKUP = [
   '<p style="visibility: hidden">HIDDEN visibility</p>',
   '<span title=">" hidden>HIDDEN after a quoted gt</span>',
   "<span hidden/>HIDDEN in a self-closed non-void</span>",
+  '<span style="display&#58;none">HIDDEN behind an encoded colon</span>',
+  '<p style="visibility&colon;hidden">HIDDEN behind a named entity</p>',
+  '<script data-x="></script>">alert("HIDDEN script after a quoted close tag")</script>',
+  '<style title=">">p { color: red } HIDDEN style after a quoted gt</style>',
   '<p aria-hidden="true" title="a hidden gem">Visible despite the words.</p>',
 ].join("")
 const LEAKED = /HIDDEN|alert/
@@ -31,7 +35,7 @@ test("detail drops hidden markup and invisible characters, keeping the visible t
     .replace('job-title="Korkeakouluharjoittelija varhaiskasvatuksen hallintoon"', `job-title="Korkeakouluharjoittelija varhaiskasvatuksen hallintoon${INVISIBLE}"`)
     .replace("<p>Haemme Vaasan", `${HIDDEN_MARKUP}<p>${INVISIBLE}Haemme Vaasan`)
   expect(hostile).not.toBe(page)
-  const job = parseDetail(hostile, SLUG, "2026-11-25")
+  const job = parseDetail(hostile, SLUG, Date.parse("2026-11-25T12:00:00+02:00"))
   const json = JSON.stringify(job)
   expect(json).not.toMatch(INVISIBLE_CHAR)
   expect(job.title).toBe("Korkeakouluharjoittelija varhaiskasvatuksen hallintoon")

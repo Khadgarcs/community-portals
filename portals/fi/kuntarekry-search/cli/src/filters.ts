@@ -92,7 +92,8 @@ export function resolveNames(input: string, kinds: string[], items: FilterItem[]
   const out: FilterItem[] = []
   for (const part of input.split(",").map((p) => p.trim()).filter(Boolean)) {
     const folded = foldName(part)
-    const alias = kinds.map((k) => ALIASES[k]?.[folded]).find(Boolean)
+    // Own keys only: "constructor" or "toString" must stay unknown names, not inherited functions.
+    const alias = kinds.map((k) => (ALIASES[k] && Object.hasOwn(ALIASES[k], folded) ? ALIASES[k][folded] : undefined)).find(Boolean)
     const wanted = alias ? foldName(alias) : folded
     const exact = pool.filter((i) => foldName(i.title) === wanted)
     // A municipality and its region can share a name only in theory; prefer the narrower one.

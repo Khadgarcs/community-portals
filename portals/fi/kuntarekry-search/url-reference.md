@@ -25,7 +25,7 @@ it, a bare array. Newest first by default. The response's content type is
 | `format=json` | JSON instead of the HTML page |
 | `includeTotal=1` | wrap the list as `{jobs, total}` |
 | `limit` | page size; values above 48 are served as 48 |
-| `/sivuN/` path segment | page N (the HTML pagination links use it); `offset`, `page`, `start` are ignored |
+| `/sivuN/` path segment | page N (the HTML pagination links use it), N = 1-999: `/sivu1000/` and up answer 301 to the HTML site for every `limit` (checked 25.11.2026); `offset`, `page`, `start` are ignored |
 | `desc` | keyword; quotes stripped, words matched as an ordered substring, no operators |
 | `region`, `location` | ids from filter data, comma-separated |
 | `type`, `employment`, `hour`, `remote`, `organisationtype`, `profession`, `professioncat` | ids from filter data |

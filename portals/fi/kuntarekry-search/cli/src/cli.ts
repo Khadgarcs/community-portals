@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { runSearch } from "./commands/search.js"
 import { runDetail } from "./commands/detail.js"
-import { CLIError, writeError, type Format } from "./helpers.js"
+import { CLIError, PAGE_MAX, writeError, type Format } from "./helpers.js"
 
 const HELP = `kuntarekry-cli: search Finnish public-sector jobs on Kuntarekry.fi
 
@@ -20,13 +20,13 @@ SEARCH FLAGS
   --org-type <name>      wellbeing | municipality | company | school.
   --jobage <days>        Only jobs posted in the last N days (Finnish calendar days).
   --sort <order>         newest (default) | deadline (closest deadline first).
-  --page <n>             Page of results, starting at 1.
+  --page <n>             Page of results, 1-999 (the board serves no page past 999).
   --limit, -n <n>        Results per page, 1-48 (default 20; the board's cap is 48).
   --format <format>      json (default) | table | plain.
   --help, -h             Show help.
 
 Names are matched without case or accents (Hameenlinna = Hämeenlinna); an unknown
-name is an error that lists close matches. Results are newest first.
+name is an error that lists close matches. Without --sort, results are newest first.
 `
 
 const VALUE_FLAGS = new Set(["query", "location", "type", "employment", "hours", "remote", "org-type", "jobage", "sort", "page", "limit", "format"])
@@ -106,7 +106,9 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     orgType: str("org-type"),
     jobage: int("jobage", undefined, 3650),
     sort,
-    page: int("page", 1, 1000)!,
+    // The board answers pages 1-999 and redirects /sivu1000/ and up to its HTML
+    // site for every page size (checked 25.11.2026), so 999 is the real ceiling.
+    page: int("page", 1, PAGE_MAX)!,
     limit: int("limit", 20, 48)!,
     format: format as Format,
   })

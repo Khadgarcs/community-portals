@@ -109,6 +109,12 @@ describe("filters", () => {
     expect(() => resolveNames("foo", ["type"], items, "type")).toThrow(/valid values: .*Harjoittelu/)
   })
 
+  test("names of Object.prototype members are unknown names, not aliases", () => {
+    for (const name of ["constructor", "toString", "__proto__", "hasOwnProperty"]) {
+      expect(() => resolveNames(name, ["type"], items, "type")).toThrow(/Unknown --type value/)
+    }
+  })
+
   test("an ambiguous prefix is refused rather than guessed", () => {
     // "Ha" prefixes Hanko and Hämeenlinna.
     expect(() => resolveNames("Ha", ["region", "location"], items, "location")).toThrow(/Ambiguous/)
@@ -119,8 +125,11 @@ describe("filters", () => {
   })
 })
 
+/** A moment in Finnish time (EET in winter). */
+const fi = (dateTime: string) => Date.parse(`${dateTime}+02:00`)
+
 describe("parseDetail", () => {
-  const job = parseDetail(detailFixture, SLUG, "2026-11-25")
+  const job = parseDetail(detailFixture, SLUG, fi("2026-11-25T12:00:00"))
 
   test("reads the facts table, JSON-LD and apply link", () => {
     expect(job.title).toBe("Korkeakouluharjoittelija varhaiskasvatuksen hallintoon")
@@ -149,7 +158,43 @@ describe("parseDetail", () => {
   })
 
   test("a deadline in the past marks the job closed", () => {
-    expect(parseDetail(detailFixture, SLUG, "2027-01-07").isActive).toBe(false)
+    expect(parseDetail(detailFixture, SLUG, fi("2027-01-07T12:00:00")).isActive).toBe(false)
+  })
+
+  test("on the deadline day the job closes at the deadline's time, not at midnight", () => {
+    const noon = detailFixture.replaceAll("klo 23:59", "klo 12:00").replace('publication-end-time="23:59"', 'publication-end-time="12:00"')
+    expect(parseDetail(noon, SLUG, fi("2027-01-06T11:30:00"))).toMatchObject({ deadline: "2027-01-06", deadlineTime: "12:00", isActive: true })
+    expect(parseDetail(noon, SLUG, fi("2027-01-06T12:30:00")).isActive).toBe(false)
+  })
+
+  test("without the facts table, dates come from the page attributes, then from JSON-LD", () => {
+    const noFacts = detailFixture.replace('title="Työpaikan tiedot"', 'title="Muuta"')
+    expect(parseDetail(noFacts, SLUG, fi("2026-11-25T12:00:00"))).toMatchObject({ date: "2026-11-23", deadline: "2027-01-06", deadlineTime: "23:59", isActive: true })
+    const ldOnly = noFacts
+      .replace('publication-date="23.11.2026"', "")
+      .replace('publication-end-time="23:59"', "")
+      .replace('publication-end="6.1.2027"', "")
+    expect(parseDetail(ldOnly, SLUG, fi("2026-11-25T12:00:00"))).toMatchObject({ date: "2026-11-23", deadline: "2027-01-06", deadlineTime: "23:59" })
+    // The posting date is never guessed from the start of the application period.
+    const noPostedDate = ldOnly.replace('"datePosted":"2026-11-23T11:21:00+02:00",', "")
+    expect(parseDetail(noPostedDate, SLUG).date).toBeNull()
+  })
+
+  test("a posting with several places lists every locality once", () => {
+    const vaasa = '{"@type":"Place","address":{"@type":"PostalAddress","addressRegion":"Pohjanmaa","addressLocality":"Vaasa","postalCode":65100,"streetAddress":"Vaasa"}}'
+    const mustasaari = '{"@type":"Place","address":{"@type":"PostalAddress","addressRegion":"Pohjanmaa","addressLocality":"Mustasaari"}}'
+    const page = detailFixture.replace(`"jobLocation":${vaasa}`, `"jobLocation":[${vaasa},${mustasaari},${vaasa}]`)
+    expect(page).not.toBe(detailFixture)
+    expect(parseDetail(page, SLUG)).toMatchObject({ location: "Vaasa, Mustasaari", region: "Pohjanmaa" })
+  })
+
+  test("a JSON-LD salary is read as text, a number or a QuantitativeValue", () => {
+    const noFact = detailFixture.replace('title="Palkka"', 'title="Palkkaus"')
+    expect(parseDetail(noFact, SLUG).salary).toBe("1521,32€/kk")
+    const number = noFact.replace('"value":"1521,32€/kk"', '"value":1521.32')
+    expect(parseDetail(number, SLUG).salary).toBe("1521.32 EUR")
+    const range = noFact.replace('"value":"1521,32€/kk"', '"value":{"@type":"QuantitativeValue","minValue":2000,"maxValue":2500,"unitText":"MONTH"}')
+    expect(parseDetail(range, SLUG).salary).toBe("2000-2500 EUR / month")
   })
 
   test("a page without a title is a bad response, not an empty job", () => {

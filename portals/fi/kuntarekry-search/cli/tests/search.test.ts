@@ -44,6 +44,11 @@ describe("search", () => {
     expect(out.meta.nextPage).toBe(2)
   })
 
+  test("page 999 is the last page the board serves, so it has no next page", async () => {
+    const out = await search({ ...base, limit: 3, page: 999 }, { get: recorder().get })
+    expect(out.meta.nextPage).toBeNull()
+  })
+
   test("resolves filter names before searching and reports what it applied", async () => {
     const r = recorder()
     const out = await search({ ...base, location: "Helsinki,Espoo", type: "internship", orgType: "municipality" }, { get: r.get, load: async () => filters })

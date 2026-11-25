@@ -69,10 +69,12 @@ describe("kuntarekryGet", () => {
   })
 
   test("gives up with RATE_OR_SERVER_ERROR when the retry budget runs out", async () => {
-    instantTimers()
+    const waits = instantTimers()
     const state = stubFetch([() => new Response("", { status: 500 })])
     await expect(kuntarekryGet("/x/", "html")).rejects.toMatchObject({ code: "RATE_OR_SERVER_ERROR" })
-    expect(state.calls).toBeLessThanOrEqual(7)
+    // Six backoffs (at most 26.5 s with jitter) fit the 30 s budget, so every retry is used.
+    expect(state.calls).toBe(7)
+    expect(waits.length).toBe(6)
   })
 
   test("a 404 is null, another 4xx is HTTP_ERROR without a retry", async () => {

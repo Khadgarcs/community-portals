@@ -8,6 +8,7 @@
 export const BASE_URL = "https://kuntarekry.fi"
 export const USER_AGENT = "Mozilla/5.0 (compatible; kuntarekry-cli/1.0)"
 export const PAGE_SIZE_MAX = 48 // the board ignores larger `limit` values (measured 25.11.2026)
+export const PAGE_MAX = 999 // /sivu1000/ and up redirect to the HTML site (measured 25.11.2026)
 
 export type Format = "json" | "table" | "plain"
 
@@ -84,9 +85,14 @@ export async function kuntarekryGet(path: string, accept: "json" | "html"): Prom
 }
 
 // ---------------------------------------------------------------------------
-// Output hygiene (copied from linkedin-search, same license). Listing text is
-// third-party data: text a reader of the posting never sees must not reach a
-// model reading this CLI's output.
+// Output hygiene (adapted from linkedin-search, same license). Listing text is
+// third-party data, so markup a browser would not render is dropped before
+// output: comments, <script>/<style>/<template> blocks, and elements with the
+// `hidden` attribute or an inline style of display:none, visibility:hidden or
+// mso-hide:all (character references in the style are decoded first), plus
+// invisible Unicode. This is a best-effort filter, not a renderer: text hidden
+// by a class, an external or <style> stylesheet, aria-hidden, zero size,
+// off-screen positioning or matching colours is not detected and can remain.
 
 const INVISIBLE_CHARS =
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F­؜᠎​-‏‪-‮⁠-⁯︀-️﻿\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu
@@ -108,7 +114,9 @@ const VOID_TAGS = new Set(["area", "base", "br", "col", "embed", "hr", "img", "i
 function isHiddenTag(attrs: string): boolean {
   for (const m of attrs.matchAll(/([^\s"'=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g)) {
     const name = m[1].toLowerCase()
-    const value = m[2] ?? m[3] ?? m[4] ?? ""
+    // Browsers decode character references in attribute values before the CSS
+    // is parsed, so `display&#58;none` hides exactly like `display:none`.
+    const value = decodeEntities(m[2] ?? m[3] ?? m[4] ?? "")
     if (name === "hidden") return true
     if (name === "style" && /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden|mso-hide\s*:\s*all)\b/i.test(value)) return true
   }
@@ -124,7 +132,8 @@ function isHiddenTag(attrs: string): boolean {
 export function visibleHtml(html: string): string {
   const src = html
     .replace(/<!--[\s\S]*?(?:-->|$)/g, "")
-    .replace(/<(script|style|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, "")
+    // ATTRS: a `>` or `</script>` inside a quoted attribute does not end the opening tag.
+    .replace(new RegExp(String.raw`<(script|style|template)\b${ATTRS}>[\s\S]*?(?:<\/\1\s*>|$)`, "gi"), "")
   const open = new RegExp(`<([a-zA-Z][a-zA-Z0-9-]*)(\\s${ATTRS})?>`, "g")
   const kept: string[] = []
   let from = 0
@@ -166,6 +175,8 @@ function numericEntity(cp: number): string {
 const NAMED: Record<string, string> = {
   amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", ndash: "–", mdash: "—",
   hellip: "…", bull: "•", euro: "€", auml: "ä", Auml: "Ä", ouml: "ö", Ouml: "Ö", aring: "å", Aring: "Å",
+  // CSS punctuation and whitespace, so an encoded inline style is recognised as hidden.
+  colon: ":", semi: ";", Tab: "\t", NewLine: "\n",
 }
 
 export function decodeEntities(text: string): string {
@@ -213,6 +224,11 @@ export function finnishDate(value: unknown): string | null {
 /** Today's date in Finland (Europe/Helsinki), so "posted today" means the board's today. */
 export function helsinkiToday(now = Date.now()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Helsinki", year: "numeric", month: "2-digit", day: "2-digit" }).format(now)
+}
+
+/** Wall-clock time in Finland as "HH:MM" (24-hour). */
+export function helsinkiClock(now = Date.now()): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Helsinki", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(now)
 }
 
 export function addDays(isoDate: string, days: number): string {

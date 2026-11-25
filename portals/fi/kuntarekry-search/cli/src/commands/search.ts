@@ -1,5 +1,5 @@
 import {
-  addDays, CLIError, helsinkiToday, kuntarekryGet, PAGE_SIZE_MAX, renderJobs, stripInvisible, toResult,
+  addDays, CLIError, helsinkiToday, kuntarekryGet, PAGE_MAX, PAGE_SIZE_MAX, renderJobs, stripInvisible, toResult,
   type Format, type JobResult,
 } from "../helpers.js"
 import { filterParams, loadFilters, resolveNames, type FilterItem } from "../filters.js"
@@ -115,7 +115,7 @@ export async function search(opts: SearchOpts, deps: {
       limit: opts.limit,
       sort,
       total,
-      nextPage: hasMore && !reachedCutoff ? opts.page + 1 : null,
+      nextPage: hasMore && !reachedCutoff && opts.page < PAGE_MAX ? opts.page + 1 : null,
       jobage: opts.jobage ?? null,
       cutoff,
       missingDates,
