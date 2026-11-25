@@ -22,6 +22,8 @@ const HIDDEN_MARKUP = [
   '<span title=">" hidden>HIDDEN after a quoted gt</span>',
   '<span hidden/>HIDDEN in a self-closed non-void</span>',
   '<span style="display&#58;none">HIDDEN behind an encoded colon</span>',
+  '<span style="display&#58none">HIDDEN behind an encoded colon without its semicolon</span>',
+  '<span style="display&#x3a none">HIDDEN behind a hex colon without its semicolon</span>',
   '<p style="visibility&colon;hidden">HIDDEN behind a named entity</p>',
   '<script data-x="></script>">alert("HIDDEN script after a quoted close tag")</script>',
   '<style title=">">p { color: red } HIDDEN style after a quoted gt</style>',

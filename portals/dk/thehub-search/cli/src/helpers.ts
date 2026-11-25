@@ -84,7 +84,10 @@ const ENTITIES: Record<string, string> = {
   colon: ":", semi: ";", Tab: "\t", NewLine: "\n",
 }
 export function decodeEntities(value: string): string {
-  return value.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (whole, key: string) => {
+  // Numeric references decode with or without the closing semicolon, as in a
+  // browser (`display&#58none` is display:none); named ones need it.
+  return value.replace(/&(#x[\da-f]+;?|#\d+;?|[a-z]+;)/gi, (whole, ref: string) => {
+    const key = ref.endsWith(";") ? ref.slice(0, -1) : ref
     if (!key.startsWith("#")) return ENTITIES[key] ?? whole
     const cp = key[1].toLowerCase() === "x" ? parseInt(key.slice(2), 16) : Number(key.slice(1))
     return cp >= 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : ""

@@ -5,9 +5,9 @@ supported flags, output fields, paging and date limitations, and
 [url-reference.md](../url-reference.md) for the verified public endpoints.
 
 > **Personal use only.** The Hub's terms let users view and print its content
-> for personal, non-commercial use and forbid other copying or reuse without
-> written consent. Use this for your own job search, keep volume low, and do
-> not republish, bulk-store or commercially use what it returns.
+> for personal, non-commercial use and forbid other copying, saving or reuse
+> without written consent. Use this for your own job search, keep volume low,
+> and do not republish, store or commercially use what it returns.
 
 From this `cli` directory:
 

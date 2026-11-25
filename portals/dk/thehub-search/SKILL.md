@@ -17,7 +17,7 @@ paid service, or runtime dependency is needed. Requires Bun on PATH.
 The Hub's [terms](https://thehub.io/terms) let users view and print its content
 for personal, non-commercial use only and forbid other copying, saving or
 reuse without written consent. Use this skill for your own job search: keep
-volume low, and do not republish, bulk-store or commercially use the results.
+volume low, and do not republish, store or commercially use the results.
 
 ## Commands
 
@@ -79,7 +79,8 @@ The example posting can expire; take a fresh ID from search when necessary.
   looks old; republishing can change it independently.
 - Detail includes cleaned `description`, `status`, `isActive`, `deadline`,
   `salary`, `equity`, and `applyUrl` (the employer's own application link;
-  `null` when the job is applied for on The Hub itself, i.e. at `url`).
+  `null` when the job is applied for on The Hub itself, i.e. at `url`, or
+  when the source link is not an `http:`/`https:` URL).
   `deadline` is the portal's `expirationDate`,
   which is not necessarily the employer's application deadline. Salary/equity
   may be labels such as `competitive` or `undisclosed`, not monetary values.
