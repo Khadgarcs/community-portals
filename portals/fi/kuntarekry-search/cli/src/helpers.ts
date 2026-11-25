@@ -180,7 +180,10 @@ const NAMED: Record<string, string> = {
 }
 
 export function decodeEntities(text: string): string {
-  return text.replace(/&(#[xX][0-9a-fA-F]+|#\d+|[a-zA-Z]+);/g, (whole, key: string) => {
+  // Numeric references decode with or without the closing semicolon, as in a
+  // browser (`display&#58none` is display:none); named ones need it.
+  return text.replace(/&(#[xX][0-9a-fA-F]+;?|#\d+;?|[a-zA-Z]+;)/g, (whole, ref: string) => {
+    const key = ref.endsWith(";") ? ref.slice(0, -1) : ref
     if (key[0] !== "#") return NAMED[key] ?? whole
     return key[1] === "x" || key[1] === "X" ? numericEntity(parseInt(key.slice(2), 16)) : numericEntity(parseInt(key.slice(1), 10))
   })

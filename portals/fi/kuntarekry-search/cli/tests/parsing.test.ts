@@ -169,7 +169,11 @@ describe("parseDetail", () => {
 
   test("without the facts table, dates come from the page attributes, then from JSON-LD", () => {
     const noFacts = detailFixture.replace('title="Työpaikan tiedot"', 'title="Muuta"')
-    expect(parseDetail(noFacts, SLUG, fi("2026-11-25T12:00:00"))).toMatchObject({ date: "2026-11-23", deadline: "2027-01-06", deadlineTime: "23:59", isActive: true })
+    // Without JSON-LD dates too, so only the page attributes can supply them.
+    const attrsOnly = noFacts.replace('"datePosted":"2026-11-23T11:21:00+02:00",', "").replace(',"validThrough":"2027-01-06T23:59:00+02:00"', "")
+    expect(attrsOnly).not.toContain("validThrough")
+    expect(attrsOnly).not.toContain("datePosted")
+    expect(parseDetail(attrsOnly, SLUG, fi("2026-11-25T12:00:00"))).toMatchObject({ date: "2026-11-23", deadline: "2027-01-06", deadlineTime: "23:59", isActive: true })
     const ldOnly = noFacts
       .replace('publication-date="23.11.2026"', "")
       .replace('publication-end-time="23:59"', "")
@@ -178,6 +182,19 @@ describe("parseDetail", () => {
     // The posting date is never guessed from the start of the application period.
     const noPostedDate = ldOnly.replace('"datePosted":"2026-11-23T11:21:00+02:00",', "")
     expect(parseDetail(noPostedDate, SLUG).date).toBeNull()
+  })
+
+  test("a JSON-LD timestamp in UTC or another offset is converted to Finnish time", () => {
+    const ldOnly = detailFixture.replace('title="Työpaikan tiedot"', 'title="Muuta"')
+      .replace('publication-date="23.11.2026"', "").replace('publication-end-time="23:59"', "").replace('publication-end="6.1.2027"', "")
+    const at = (posted: string, until: string) => parseDetail(
+      ldOnly.replace('"datePosted":"2026-11-23T11:21:00+02:00"', `"datePosted":"${posted}"`).replace('"validThrough":"2027-01-06T23:59:00+02:00"', `"validThrough":"${until}"`),
+      SLUG, fi("2027-01-06T12:00:00"))
+    expect(at("2026-11-22T22:30:00Z", "2027-01-06T21:59:00Z")).toMatchObject({ date: "2026-11-23", deadline: "2027-01-06", deadlineTime: "23:59", isActive: true })
+    // 22:30 UTC on the 6th is already 00:30 on the 7th in Finland.
+    expect(at("2026-11-23", "2027-01-06T22:30:00Z")).toMatchObject({ date: "2026-11-23", deadline: "2027-01-07", deadlineTime: "00:30" })
+    // Without an offset the time is Finnish local time, as written.
+    expect(at("2026-11-23T11:21:00", "2027-01-06T11:00:00")).toMatchObject({ deadline: "2027-01-06", deadlineTime: "11:00", isActive: false })
   })
 
   test("a posting with several places lists every locality once", () => {

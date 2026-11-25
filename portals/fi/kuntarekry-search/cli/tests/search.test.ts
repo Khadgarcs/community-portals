@@ -44,9 +44,14 @@ describe("search", () => {
     expect(out.meta.nextPage).toBe(2)
   })
 
-  test("page 999 is the last page the board serves, so it has no next page", async () => {
-    const out = await search({ ...base, limit: 3, page: 999 }, { get: recorder().get })
+  test("page 999 is the last page the board serves, so it does not advertise page 1000", async () => {
+    // A total large enough that page 1000 would otherwise exist.
+    const r = recorder(JSON.stringify({ ...JSON.parse(searchFixture), total: 3000 }))
+    const out = await search({ ...base, limit: 3, page: 999 }, { get: r.get })
+    expect(r.paths).toEqual(["/fi/tyopaikat/sivu999/?format=json&includeTotal=1&limit=3"])
     expect(out.meta.nextPage).toBeNull()
+    const before = await search({ ...base, limit: 3, page: 998 }, { get: recorder(JSON.stringify({ ...JSON.parse(searchFixture), total: 3000 })).get })
+    expect(before.meta.nextPage).toBe(999)
   })
 
   test("resolves filter names before searching and reports what it applied", async () => {

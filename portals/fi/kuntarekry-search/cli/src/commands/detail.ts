@@ -72,11 +72,23 @@ function clock(value: string | null | undefined): string | null {
   return m && Number(m[1]) < 24 && Number(m[2]) < 60 ? `${m[1].padStart(2, "0")}:${m[2]}` : null
 }
 
-/** A JSON-LD timestamp's own calendar date and time, as written ("2027-01-06T23:59:00+02:00" -> 2027-01-06, 23:59). */
+/**
+ * A JSON-LD date or timestamp as a Finnish calendar date and clock time. A
+ * timestamp with an offset or Z is an instant and is converted to
+ * Europe/Helsinki ("2027-01-06T21:59:00Z" -> 2027-01-06, 23:59); one without
+ * an offset is taken as written, as Finnish local time.
+ */
 function ldTimestamp(value: unknown): { date: string | null; time: string | null } {
-  const m = typeof value === "string" ? value.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2}))?/) : null
-  if (!m) return { date: null, time: null }
-  return { date: finnishDate(`${m[3]}.${m[2]}.${m[1]}`), time: clock(m[4]) }
+  const none = { date: null, time: null }
+  const m = typeof value === "string"
+    ? value.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/i)
+    : null
+  const written = m ? finnishDate(`${m[3]}.${m[2]}.${m[1]}`) : null
+  if (!m || !written) return none
+  if (!m[4]) return { date: written, time: null }
+  if (!m[5]) return { date: written, time: clock(m[4]) }
+  const instant = Date.parse(value as string)
+  return Number.isFinite(instant) ? { date: helsinkiToday(instant), time: helsinkiClock(instant) } : none
 }
 
 /** schema.org baseSalary: `value` may be text, a number or a QuantitativeValue. */
