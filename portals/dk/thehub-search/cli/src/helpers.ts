@@ -18,12 +18,20 @@ export function object(value: unknown): RecordData {
 export function text(value: unknown): string | null {
   return typeof value === "string" ? value.trim() || null : null
 }
+/**
+ * The UTC calendar date of an ISO date or timestamp. The written date is
+ * validated on its own (2026-02-30 is refused), so a timestamp whose offset
+ * crosses midnight UTC ("2026-01-01T00:30:00+02:00" -> 2025-12-31) still parses.
+ */
 export function date(value: unknown): string | null {
   const raw = text(value)
-  if (!raw || !/^\d{4}-\d{2}-\d{2}(?:T.*)?$/.test(raw)) return null
+  const m = raw?.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/)
+  if (!raw || !m) return null
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])]
+  const written = new Date(Date.UTC(y, mo - 1, d))
+  if (written.getUTCFullYear() !== y || written.getUTCMonth() !== mo - 1 || written.getUTCDate() !== d) return null
   const parsed = new Date(raw)
-  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === raw.slice(0, 10)
-    ? raw.slice(0, 10) : null
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null
 }
 export function normalizeId(input: string): string | null {
   if (/^[a-f0-9]{24}$/i.test(input)) return input.toLowerCase()
@@ -72,11 +80,25 @@ const ENTITIES: Record<string, string> = {
   amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
   ndash: "–", mdash: "—", lsquo: "‘", rsquo: "’", ldquo: "“", rdquo: "”", hellip: "…", bull: "•",
   aelig: "æ", AElig: "Æ", oslash: "ø", Oslash: "Ø", aring: "å", Aring: "Å",
+  // CSS punctuation and whitespace, so an encoded inline style is recognised as hidden.
+  colon: ":", semi: ";", Tab: "\t", NewLine: "\n",
+}
+export function decodeEntities(value: string): string {
+  return value.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (whole, key: string) => {
+    if (!key.startsWith("#")) return ENTITIES[key] ?? whole
+    const cp = key[1].toLowerCase() === "x" ? parseInt(key.slice(2), 16) : Number(key.slice(1))
+    return cp >= 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : ""
+  })
 }
 // ---------------------------------------------------------------------------
-// Output hygiene (from linkedin-search, same license). Posting text is
-// third-party data: text a reader of the posting never sees must not reach a
-// model reading this CLI's output.
+// Output hygiene (adapted from linkedin-search, same license). Posting text is
+// third-party data, so markup a browser would not render is dropped before
+// output: comments, <script>/<style>/<template> blocks, and elements with the
+// `hidden` attribute or an inline style of display:none, visibility:hidden or
+// mso-hide:all (character references in the style are decoded first), plus
+// invisible Unicode. This is a best-effort filter, not a renderer: text hidden
+// by a class, an external or <style> stylesheet, aria-hidden, zero size,
+// off-screen positioning or matching colours is not detected and can remain.
 
 const INVISIBLE_CHARS =
   /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F­؜᠎​-‏‪-‮⁠-⁯︀-️﻿\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu
@@ -98,7 +120,9 @@ const VOID_TAGS = new Set(["area", "base", "br", "col", "embed", "hr", "img", "i
 function isHiddenTag(attrs: string): boolean {
   for (const m of attrs.matchAll(/([^\s"'=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g)) {
     const name = m[1].toLowerCase()
-    const value = m[2] ?? m[3] ?? m[4] ?? ""
+    // Browsers decode character references in attribute values before the CSS
+    // is parsed, so `display&#58;none` hides exactly like `display:none`.
+    const value = decodeEntities(m[2] ?? m[3] ?? m[4] ?? "")
     if (name === "hidden") return true
     if (name === "style" && /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden|mso-hide\s*:\s*all)\b/i.test(value)) return true
   }
@@ -114,7 +138,8 @@ function isHiddenTag(attrs: string): boolean {
 export function visibleHtml(html: string): string {
   const src = html
     .replace(/<!--[\s\S]*?(?:-->|$)/g, "")
-    .replace(/<(script|style|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, "")
+    // ATTRS: a `>` or `</script>` inside a quoted attribute does not end the opening tag.
+    .replace(new RegExp(String.raw`<(script|style|template)\b${ATTRS}>[\s\S]*?(?:<\/\1\s*>|$)`, "gi"), "")
   const open = new RegExp(`<([a-zA-Z][a-zA-Z0-9-]*)(\\s${ATTRS})?>`, "g")
   const kept: string[] = []
   let from = 0
@@ -151,14 +176,10 @@ export function visibleHtml(html: string): string {
 export function cleanHtml(value: unknown): string | null {
   const html = text(value)
   if (!html) return null
-  return visibleHtml(html)
+  const stripped = visibleHtml(html)
     .replace(/<br\s*\/?\s*>|<\/(?:p|div|h[1-6]|li|ul|ol)>/gi, "\n")
     .replace(/<li\b[^>]*>/gi, "• ").replace(new RegExp(`<${ATTRS}>`, "g"), "")
-    .replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (whole, key: string) => {
-      if (!key.startsWith("#")) return ENTITIES[key] ?? whole
-      const cp = key[1].toLowerCase() === "x" ? parseInt(key.slice(2), 16) : Number(key.slice(1))
-      return cp >= 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : ""
-    }).replace(/[ \t\r]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim() || null
+  return decodeEntities(stripped).replace(/[ \t\r]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim() || null
 }
 
 const POSITION_TYPES: Record<string, string> = {
@@ -185,7 +206,8 @@ export function toResult(value: unknown): JobResult | null {
   const published = date(job.publishedAt), created = date(job.createdAt)
   return {
     id, title, company: cleanHtml(object(job.company).name),
-    location: text(loc.address) ?? ([text(loc.locality), text(loc.country)].filter(Boolean).join(", ") || null),
+    // Location parts are third-party text too, so they go through the same cleaner.
+    location: cleanHtml(loc.address) ?? ([cleanHtml(loc.locality), cleanHtml(loc.country)].filter(Boolean).join(", ") || null),
     date: published ?? created, dateSource: published ? "publishedAt" : created ? "createdAt" : null,
     url: `${BASE_URL}/jobs/${id}`, isRemote: typeof job.isRemote === 'boolean' ? job.isRemote : null,
     employmentTypes: Array.isArray(job.jobPositionTypes) ? job.jobPositionTypes.filter((v): v is string => typeof v === 'string').map(v => POSITION_TYPES[v] ?? v) : [],
@@ -199,7 +221,9 @@ export function toDetail(value: unknown, expectedId: string) {
     ...result, description: cleanHtml(job.description), status,
     isActive: status === 'ACTIVE' ? true : status ? false : null,
     deadline: date(job.expirationDate), salary: text(job.salary), equity: text(job.equity),
-    applyUrl: safeWebUrl(job.link) ?? result.url,
+    // The employer's own application link; null when the job is applied for on
+    // The Hub itself (its listing page, `url`) or the link is not http(s).
+    applyUrl: safeWebUrl(job.link),
   }
 }
 function safeWebUrl(value: unknown): string | null {

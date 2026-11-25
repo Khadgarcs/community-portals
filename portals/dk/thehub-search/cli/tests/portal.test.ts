@@ -36,6 +36,20 @@ describe('The Hub result normalization', () => {
     expect(date('2026-02-30')).toBeNull()
     expect(date('not a date')).toBeNull()
   })
+  test('a timestamp whose offset crosses midnight UTC is dated, on its UTC day', () => {
+    expect(date('2026-01-01T00:30:00+02:00')).toBe('2025-12-31')
+    expect(date('2026-10-25T23:30:00-05:00')).toBe('2026-10-26')
+    expect(date('2026-10-25')).toBe('2026-10-25')
+    expect(date('2026-02-30T10:00:00Z')).toBeNull()
+  })
+  test('location parts are cleaned like any other source text', () => {
+    const job = toResult({ ...fixture.docs[0], location: { locality: 'Aarhus<span hidden> HIDDEN</span>', country: 'Denmark &amp; more' } })!
+    expect(job.location).toBe('Aarhus, Denmark & more')
+  })
+  test('without an employer link, applyUrl is null rather than the listing page', () => {
+    expect(toDetail({ ...full, link: null }, full.id).applyUrl).toBeNull()
+    expect(toDetail({ ...full, link: 'javascript:alert(1)' }, full.id).applyUrl).toBeNull()
+  })
   test('detail IDs cannot redirect lookups to an unrelated host', () => {
     expect(normalizeId(full.id)).toBe(full.id)
     expect(normalizeId(`https://thehub.io/jobs/${full.id}?ref=search`)).toBe(full.id)
@@ -55,7 +69,11 @@ describe('search filters and pagination', () => {
     expect(searchPath({ ...opts, remote: true })).not.toContain('countryCode')
     expect(searchPath({ ...opts, remote: true, country: 'DK' })).toContain('isRemote=true')
   })
-  test('deduplicates and isolates malformed rows, caps one source page', async () => {
+  test('deduplicates repeated rows on a page', async () => {
+    const output = await search({ ...opts, limit: 10 }, async () => ({ ...fixture, docs: [fixture.docs[0], fixture.docs[0], fixture.docs[1]], total: 3, pages: 1 }))
+    expect(output.results.map(j => j.id)).toEqual([fixture.docs[0].id, fixture.docs[1].id])
+  })
+  test('isolates malformed rows and caps one source page', async () => {
     const output = await search({ ...opts, limit: 1 }, async () => ({ ...fixture, docs: [null, fixture.docs[0], fixture.docs[0], fixture.docs[1]], total: 40, pages: 3 }))
     expect(output.results.length).toBe(1)
     expect(output.meta.malformed).toBe(1)

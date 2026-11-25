@@ -4,11 +4,19 @@ Zero-runtime-dependency Bun CLI for The Hub. See [SKILL.md](../SKILL.md) for
 supported flags, output fields, paging and date limitations, and
 [url-reference.md](../url-reference.md) for the verified public endpoints.
 
-From the repository root:
+> **Personal use only.** The Hub's terms let users view and print its content
+> for personal, non-commercial use and forbid other copying or reuse without
+> written consent. Use this for your own job search, keep volume low, and do
+> not republish, bulk-store or commercially use what it returns.
+
+From this `cli` directory:
 
 ```bash
-bun run .agents/skills/thehub-search/cli/src/cli.ts search -q product --country DK --limit 5 --format table
+bun run src/cli.ts search -q product --country DK --limit 5 --format table
 ```
+
+Installed as a skill, the same CLI runs as
+`bun run .agents/skills/thehub-search/cli/src/cli.ts ...` from your project root.
 
 For development, from this `cli` directory with Bun on PATH:
 

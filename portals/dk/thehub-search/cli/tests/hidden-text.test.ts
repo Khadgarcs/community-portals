@@ -21,6 +21,10 @@ const HIDDEN_MARKUP = [
   '<p style="visibility: hidden">HIDDEN visibility</p>',
   '<span title=">" hidden>HIDDEN after a quoted gt</span>',
   '<span hidden/>HIDDEN in a self-closed non-void</span>',
+  '<span style="display&#58;none">HIDDEN behind an encoded colon</span>',
+  '<p style="visibility&colon;hidden">HIDDEN behind a named entity</p>',
+  '<script data-x="></script>">alert("HIDDEN script after a quoted close tag")</script>',
+  '<style title=">">p { color: red } HIDDEN style after a quoted gt</style>',
   '<p aria-hidden="true" title="a hidden gem">Visible despite the words.</p>',
 ].join('')
 const LEAKED = /HIDDEN|alert/

@@ -14,7 +14,7 @@ export async function runDetail(input: string, format: Format): Promise<void> {
     `Status: ${job.status ?? 'unknown'}`, `Published: ${job.date ?? 'unknown'}`,
     `Employment: ${job.employmentTypes.join(', ') || 'unknown'}`,
     `Portal expiry: ${job.deadline ?? 'unknown'}`, `Salary: ${job.salary ?? 'unknown'}`,
-    '', job.description ?? '(no description)', '', `URL: ${job.url}`, `Apply: ${job.applyUrl}`,
+    '', job.description ?? '(no description)', '', `URL: ${job.url}`, `Apply: ${job.applyUrl ?? `${job.url} (on The Hub)`}`,
   ].join('\n')
   process.stdout.write(output + '\n')
 }

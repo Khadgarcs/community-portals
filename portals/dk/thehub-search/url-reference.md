@@ -46,8 +46,13 @@ configuration. Unknown future IDs pass through instead of being dropped.
 Reconnaissance sources: [jobs](https://thehub.io/jobs),
 [robots.txt](https://thehub.io/robots.txt), [terms](https://thehub.io/terms).
 The checked robots file disallowed only `/startups/joblistwidget/`; search and
-detail paths were not disallowed. The reviewed terms did not contain a specific
-automated-access prohibition. Access remains subject to the current site rules.
+detail paths were not disallowed. The terms (checked 25.11.2026) contain no
+specific automated-access prohibition, but they let users view and print the
+content for personal, non-commercial use only and forbid other copying,
+saving or reuse without written consent. This tool is therefore documented as
+personal use only (SKILL.md, cli/README.md): one person's own job search, low
+volume, nothing republished or stored in bulk. Access remains subject to the
+current site rules.
 Public reads worked with `Mozilla/5.0 (compatible; thehub-cli/1.0)` and no cookies
 or credentials. Do not add authenticated, application-submission or subscription
 operations to this search tool.
