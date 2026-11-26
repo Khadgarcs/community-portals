@@ -80,14 +80,16 @@ function clock(value: string | null | undefined): string | null {
  */
 function ldTimestamp(value: unknown): { date: string | null; time: string | null } {
   const none = { date: null, time: null }
-  const m = typeof value === "string"
-    ? value.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/i)
-    : null
+  const raw = typeof value === "string" ? value.trim() : ""
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}:\d{2})(?::(\d{2})(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$/i)
   const written = m ? finnishDate(`${m[3]}.${m[2]}.${m[1]}`) : null
   if (!m || !written) return none
   if (!m[4]) return { date: written, time: null }
-  if (!m[5]) return { date: written, time: clock(m[4]) }
-  const instant = Date.parse(value as string)
+  // A malformed time ("23:59:99", "24:00") makes the whole value unusable, so the page fallbacks apply.
+  const time = clock(m[4])
+  if (!time || (m[5] !== undefined && Number(m[5]) > 59)) return none
+  if (!m[6]) return { date: written, time }
+  const instant = Date.parse(raw)
   return Number.isFinite(instant) ? { date: helsinkiToday(instant), time: helsinkiClock(instant) } : none
 }
 
@@ -224,7 +226,8 @@ export async function runDetail(input: string, format: Format): Promise<void> {
     job.description ?? "(no description)",
     "",
     `URL: ${job.url}`,
-    `Apply: ${job.applyUrl ?? job.url}`,
+    // Email-only postings have no apply link; never present the posting URL as one.
+    `Apply: ${job.applyUrl ?? "no apply link (see the posting for how to apply)"}`,
   ].join("\n")
   process.stdout.write(out + "\n")
 }

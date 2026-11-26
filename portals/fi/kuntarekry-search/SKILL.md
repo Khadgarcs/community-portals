@@ -106,7 +106,7 @@ Postings expire; take a fresh id from `search` when an example 404s.
 |---|---|---|
 | `json` | `{meta, results}` | one job object |
 | `table` | tab-separated rows: title, employer, location, posted, deadline, URL | same as plain |
-| `plain` | readable blocks with the URL | header lines, the full posting, URL and apply link |
+| `plain` | readable blocks with the URL | header lines, the full posting, URL and apply link (`no apply link` when `applyUrl` is `null`) |
 
 Each search result has `id`, `title`, `company` (the employer), `unit` (the
 department, when it differs), `location` (all municipalities the posting

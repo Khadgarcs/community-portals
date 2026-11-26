@@ -56,6 +56,8 @@ describe("search and detail against a local copy of the board", () => {
       "/fi/api/filters-data/": await Bun.file(join(FIXTURES, "filters.json")).text(),
       [`/fi/tyopaikat/${SLUG}/`]: await Bun.file(join(FIXTURES, "detail-vaasa-harjoittelija.html")).text(),
       "/fi/tyopaikat/busy-1/": () => new Response("slow down", { status: 403 }),
+      // The same posting with its apply button removed, as for an email-only posting.
+      "/fi/tyopaikat/email-only-1/": (await Bun.file(join(FIXTURES, "detail-vaasa-harjoittelija.html")).text()).replaceAll("apply-button", "apply-removed"),
     })
   })
   afterAll(() => board.stop())
@@ -103,6 +105,13 @@ describe("search and detail against a local copy of the board", () => {
     expect(r.exitCode).toBe(0)
     expect(r.stdout).toStartWith("Korkeakouluharjoittelija varhaiskasvatuksen hallintoon\nVaasan kaupunki · Vaasa, Pohjanmaa")
     expect(r.stdout).toContain("Apply: https://www.kuntarekrytointi.fi/")
+  })
+
+  test("without an apply link, plain output says so instead of offering the posting URL", async () => {
+    const r = await runCLI(["detail", "email-only-1", "--format", "plain"], board.preload)
+    expect(r.exitCode).toBe(0)
+    expect(r.stdout).toContain("Apply: no apply link (see the posting for how to apply)")
+    expect(r.stdout).not.toMatch(/^Apply: https?:/m)
   })
 
   test("a closed or missing posting is NOT_FOUND", async () => {

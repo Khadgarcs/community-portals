@@ -195,6 +195,12 @@ describe("parseDetail", () => {
     expect(at("2026-11-23", "2027-01-06T22:30:00Z")).toMatchObject({ date: "2026-11-23", deadline: "2027-01-07", deadlineTime: "00:30" })
     // Without an offset the time is Finnish local time, as written.
     expect(at("2026-11-23T11:21:00", "2027-01-06T11:00:00")).toMatchObject({ deadline: "2027-01-06", deadlineTime: "11:00", isActive: false })
+    // Surrounding whitespace is ignored for instants as for local times.
+    expect(at(" 2026-11-22T22:30:00Z ", " 2027-01-06T21:59:00Z ")).toMatchObject({ date: "2026-11-23", deadlineTime: "23:59" })
+    // A malformed time is unusable as a whole: no date or deadline is taken from it.
+    for (const bad of ["2027-01-06T23:59:99", "2027-01-06T24:00:00", "2027-01-06T23:60", "2027-01-06T23:59:99+02:00"]) {
+      expect(at(bad, bad)).toMatchObject({ date: null, deadline: null, deadlineTime: null, isActive: null })
+    }
   })
 
   test("a posting with several places lists every locality once", () => {
